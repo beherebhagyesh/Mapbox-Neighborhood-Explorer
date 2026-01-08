@@ -115,6 +115,19 @@ class NeighborhoodExplorer {
     });
   }
 
+  private getSearchCategory(category: string): string {
+    const mapping: Record<string, string> = {
+      'highlights': 'tourist_attraction',
+      'grocery': 'grocery',
+      'food-drink': 'food_and_drink',
+      'parks': 'park',
+      'shopping': 'shopping',
+      'sports': 'fitness',
+      'entertainment': 'entertainment'
+    };
+    return mapping[category] || 'point_of_interest';
+  }
+
   private async fetchPOIs() {
     if (!this.map || !this.accessToken) return;
 
@@ -122,29 +135,59 @@ class NeighborhoodExplorer {
     if (cardsList) cardsList.innerHTML = '<div class="loading-state">Exploring the neighborhood...</div>';
 
     const [lng, lat] = NEIGHBORHOOD_CENTER;
-    const query = this.currentCategory.replace('-', ' ');
+    const category = this.getSearchCategory(this.currentCategory);
 
-    // Using v5 Geocoding API as it's the most reliable for broad query searches like "Parks" or "Food"
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&access_token=${this.accessToken}&types=poi&limit=12&radius=5000`;
+    // Primary Search: Mapbox Search Box API (v1) - Category specific
+    // This is the most modern and robust way to find POIs by category
+    const url = `https://api.mapbox.com/search/searchbox/v1/category/${category}?proximity=${lng},${lat}&access_token=${this.accessToken}&limit=12`;
 
     try {
       const response = await fetch(url);
       const data = await response.json();
 
       if (!data.features || data.features.length === 0) {
+        // Switch to fallback if Search Box returns nothing
+        await this.fetchPOIsFallback();
+        return;
+      }
+
+      this.displayPOIs(data.features, 'searchbox');
+    } catch (error) {
+      console.error('Search Box API error, trying fallback...', error);
+      await this.fetchPOIsFallback();
+    }
+  }
+
+  private async fetchPOIsFallback() {
+    if (!this.map || !this.accessToken) return;
+
+    const [lng, lat] = NEIGHBORHOOD_CENTER;
+    const query = this.currentCategory.replace('-', ' ');
+
+    // Fallback Search: Mapbox Geocoding API (v5) - Free text
+    // We remove the 'types=poi' to be more broad if specific POIs aren't found
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&access_token=${this.accessToken}&limit=12`;
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      const cardsList = document.getElementById('poi-cards-list');
+      if (!data.features || data.features.length === 0) {
         if (cardsList) cardsList.innerHTML = '<div class="no-results">No locations found. Try another category or zoom out.</div>';
         this.clearMarkers();
         return;
       }
 
-      this.displayPOIs(data.features);
+      this.displayPOIs(data.features, 'geocoding');
     } catch (error) {
-      console.error('Fetch error:', error);
-      if (cardsList) cardsList.innerHTML = '<div class="no-results">Error connecting to Mapbox. Check your connectivity.</div>';
+      console.error('Fallback error:', error);
+      const cardsList = document.getElementById('poi-cards-list');
+      if (cardsList) cardsList.innerHTML = '<div class="no-results">Error connecting to map services.</div>';
     }
   }
 
-  private displayPOIs(features: any[]) {
+  private displayPOIs(features: any[], type: 'searchbox' | 'geocoding') {
     this.clearMarkers();
     const cardsList = document.getElementById('poi-cards-list');
     if (!cardsList) return;
@@ -152,7 +195,7 @@ class NeighborhoodExplorer {
 
     const pois: POI[] = features.map(f => {
       const p = f.properties || {};
-      const name = f.text || 'Local Spot';
+      const name = type === 'searchbox' ? p.name : f.text;
 
       // Better Mock Data for Premium Feel
       const rating = 4 + (Math.random() * 0.9);
@@ -162,9 +205,9 @@ class NeighborhoodExplorer {
 
       return {
         id: f.id,
-        name: name,
-        address: p.address || f.place_name?.split(',')[0] || 'Lake Nona South',
-        category: p.category || this.currentCategory.replace('-', ' '),
+        name: name || 'Local Spot',
+        address: type === 'searchbox' ? p.full_address || p.address || 'Lake Nona' : f.place_name?.split(',')[0] || 'Lake Nona South',
+        category: (type === 'searchbox' ? p.poi_category?.[0] : p.category) || this.currentCategory.replace('-', ' '),
         coordinates: f.geometry?.coordinates || f.center,
         rating: parseFloat(rating.toFixed(1)),
         reviews: reviews,
