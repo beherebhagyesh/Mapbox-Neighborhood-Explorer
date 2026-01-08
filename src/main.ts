@@ -81,6 +81,12 @@ class NeighborhoodExplorer {
       style: 'mapbox://styles/mapbox/light-v11',
       center: NEIGHBORHOOD_CENTER,
       zoom: DEFAULT_ZOOM,
+      minZoom: 12,
+      maxZoom: 18,
+      maxBounds: [
+        [-81.32, 28.32],  // Southwest corner (with padding)
+        [-81.22, 28.42]   // Northeast corner (with padding)
+      ],
       attributionControl: false
     });
 
