@@ -24,6 +24,9 @@ const NEIGHBORHOOD_BOUNDARY = [
   [-81.298, 28.398]
 ];
 
+// Bounding box for Lake Nona South area
+const NEIGHBORHOOD_BBOX = '-81.298,28.338,-81.246,28.398';
+
 class NeighborhoodExplorer {
   private map: mapboxgl.Map | null = null;
   private markers: mapboxgl.Marker[] = [];
@@ -115,19 +118,6 @@ class NeighborhoodExplorer {
     });
   }
 
-  private getSearchCategory(category: string): string {
-    const mapping: Record<string, string> = {
-      'highlights': 'tourist_attraction',
-      'grocery': 'grocery',
-      'food-drink': 'food_and_drink',
-      'parks': 'park',
-      'shopping': 'shopping',
-      'sports': 'fitness',
-      'entertainment': 'entertainment'
-    };
-    return mapping[category] || 'point_of_interest';
-  }
-
   private async fetchPOIs() {
     if (!this.map || !this.accessToken) return;
 
@@ -135,51 +125,68 @@ class NeighborhoodExplorer {
     if (cardsList) cardsList.innerHTML = '<div class="loading-state">Exploring the neighborhood...</div>';
 
     const [lng, lat] = NEIGHBORHOOD_CENTER;
-    const category = this.getSearchCategory(this.currentCategory);
+    const query = this.currentCategory.replace('-', ' ');
 
-    // Primary Search: Mapbox Search Box API (v1) - Restricted by Bounding Box (bbox)
-    const bbox = '-81.298,28.338,-81.246,28.398';
-    const url = `https://api.mapbox.com/search/searchbox/v1/category/${category}?proximity=${lng},${lat}&bbox=${bbox}&access_token=${this.accessToken}&limit=12`;
+    // Use Geocoding API with bbox and types=poi for best localized results
+    // This is more reliable than Search Box API for small neighborhood areas
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&bbox=${NEIGHBORHOOD_BBOX}&types=poi&access_token=${this.accessToken}&limit=12`;
 
     try {
       const response = await fetch(url);
       const data = await response.json();
 
       if (!data.features || data.features.length === 0) {
-        // Switch to fallback if Search Box returns nothing
-        await this.fetchPOIsFallback();
+        // Try without bbox restriction but with smaller radius
+        await this.fetchPOIsWithRadius();
         return;
       }
 
-      this.displayPOIs(data.features, 'searchbox');
+      // Filter results to ensure they're actually within our bbox
+      const filtered = this.filterByBoundingBox(data.features);
+
+      if (filtered.length === 0) {
+        await this.fetchPOIsWithRadius();
+        return;
+      }
+
+      this.displayPOIs(filtered);
     } catch (error) {
-      console.error('Search Box API error, trying fallback...', error);
-      await this.fetchPOIsFallback();
+      console.error('Geocoding API error:', error);
+      await this.fetchPOIsWithRadius();
     }
   }
 
-  private async fetchPOIsFallback() {
+  private async fetchPOIsWithRadius() {
     if (!this.map || !this.accessToken) return;
 
     const [lng, lat] = NEIGHBORHOOD_CENTER;
     const query = this.currentCategory.replace('-', ' ');
-    const bbox = '-81.298,28.338,-81.246,28.398';
 
-    // Fallback Search: Mapbox Geocoding API (v5) - Restricted by Bounding Box (bbox)
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&bbox=${bbox}&access_token=${this.accessToken}&limit=12`;
+    // Fallback: Use proximity with a 3km radius (no bbox)
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&types=poi&access_token=${this.accessToken}&limit=20`;
 
     try {
       const response = await fetch(url);
       const data = await response.json();
 
-      const cardsList = document.getElementById('poi-cards-list');
       if (!data.features || data.features.length === 0) {
-        if (cardsList) cardsList.innerHTML = '<div class="no-results">No locations found. Try another category or zoom out.</div>';
+        const cardsList = document.getElementById('poi-cards-list');
+        if (cardsList) cardsList.innerHTML = '<div class="no-results">No locations found nearby. Try another category.</div>';
         this.clearMarkers();
         return;
       }
 
-      this.displayPOIs(data.features, 'geocoding');
+      // Filter to keep only results within ~3km and prefer those in our bbox
+      const nearby = this.filterByDistance(data.features, 3000);
+
+      if (nearby.length === 0) {
+        const cardsList = document.getElementById('poi-cards-list');
+        if (cardsList) cardsList.innerHTML = '<div class="no-results">No locations found nearby. Try another category.</div>';
+        this.clearMarkers();
+        return;
+      }
+
+      this.displayPOIs(nearby);
     } catch (error) {
       console.error('Fallback error:', error);
       const cardsList = document.getElementById('poi-cards-list');
@@ -187,7 +194,47 @@ class NeighborhoodExplorer {
     }
   }
 
-  private displayPOIs(features: any[], type: 'searchbox' | 'geocoding') {
+  private filterByBoundingBox(features: any[]): any[] {
+    const [minLng, minLat, maxLng, maxLat] = NEIGHBORHOOD_BBOX.split(',').map(Number);
+
+    return features.filter(f => {
+      const coords = f.geometry?.coordinates || f.center;
+      if (!coords) return false;
+      const [lng, lat] = coords;
+      return lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat;
+    });
+  }
+
+  private filterByDistance(features: any[], maxDistanceMeters: number): any[] {
+    const [centerLng, centerLat] = NEIGHBORHOOD_CENTER;
+
+    return features
+      .map(f => {
+        const coords = f.geometry?.coordinates || f.center;
+        if (!coords) return null;
+        const [lng, lat] = coords;
+
+        // Haversine distance calculation
+        const R = 6371e3; // Earth radius in meters
+        const φ1 = centerLat * Math.PI / 180;
+        const φ2 = lat * Math.PI / 180;
+        const Δφ = (lat - centerLat) * Math.PI / 180;
+        const Δλ = (lng - centerLng) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+
+        return { feature: f, distance };
+      })
+      .filter(item => item !== null && item.distance <= maxDistanceMeters)
+      .sort((a, b) => a!.distance - b!.distance)
+      .map(item => item!.feature);
+  }
+
+  private displayPOIs(features: any[]) {
     this.clearMarkers();
     const cardsList = document.getElementById('poi-cards-list');
     if (!cardsList) return;
@@ -195,7 +242,7 @@ class NeighborhoodExplorer {
 
     const pois: POI[] = features.map(f => {
       const p = f.properties || {};
-      const name = type === 'searchbox' ? p.name : f.text;
+      const name = f.text || 'Local Spot';
 
       // Better Mock Data for Premium Feel
       const rating = 4 + (Math.random() * 0.9);
@@ -205,9 +252,9 @@ class NeighborhoodExplorer {
 
       return {
         id: f.id,
-        name: name || 'Local Spot',
-        address: type === 'searchbox' ? p.full_address || p.address || 'Lake Nona' : f.place_name?.split(',')[0] || 'Lake Nona South',
-        category: (type === 'searchbox' ? p.poi_category?.[0] : p.category) || this.currentCategory.replace('-', ' '),
+        name: name,
+        address: p.address || f.place_name?.split(',')[0] || 'Lake Nona South',
+        category: p.category || this.currentCategory.replace('-', ' '),
         coordinates: f.geometry?.coordinates || f.center,
         rating: parseFloat(rating.toFixed(1)),
         reviews: reviews,
