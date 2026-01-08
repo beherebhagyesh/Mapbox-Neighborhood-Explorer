@@ -24,6 +24,12 @@ const NEIGHBORHOOD_BOUNDARY = [
   [-81.298, 28.398]
 ];
 
+// Map bounds for Lake Nona South (with padding for user experience)
+const MAP_BOUNDS: [[number, number], [number, number]] = [
+  [-81.32, 28.32],  // Southwest
+  [-81.22, 28.42]   // Northeast
+];
+
 class NeighborhoodExplorer {
   private map: mapboxgl.Map | null = null;
   private markers: mapboxgl.Marker[] = [];
@@ -46,7 +52,6 @@ class NeighborhoodExplorer {
   }
 
   private initEventListeners() {
-    // API KEY SAVE
     document.getElementById('save-token')?.addEventListener('click', () => {
       const tokenInput = document.getElementById('mapbox-token') as HTMLInputElement;
       if (tokenInput.value) {
@@ -83,10 +88,7 @@ class NeighborhoodExplorer {
       zoom: DEFAULT_ZOOM,
       minZoom: 12,
       maxZoom: 18,
-      maxBounds: [
-        [-81.32, 28.32],  // Southwest corner (with padding)
-        [-81.22, 28.42]   // Northeast corner (with padding)
-      ],
+      maxBounds: MAP_BOUNDS,
       attributionControl: false
     });
 
@@ -122,111 +124,105 @@ class NeighborhoodExplorer {
   }
 
   private getSearchCategory(category: string): string {
+    // Mapbox Search Box API category IDs
     const mapping: Record<string, string> = {
-      'highlights': 'tourist_attraction',
+      'highlights': 'restaurant',
       'grocery': 'grocery',
-      'food-drink': 'food_and_drink',
+      'food-drink': 'restaurant',
       'parks': 'park',
-      'shopping': 'shopping',
-      'sports': 'fitness',
-      'entertainment': 'entertainment'
+      'shopping': 'shopping_mall',
+      'sports': 'gym',
+      'entertainment': 'movie_theater'
     };
-    return mapping[category] || 'point_of_interest';
+    return mapping[category] || 'restaurant';
   }
 
   private async fetchPOIs() {
     if (!this.map || !this.accessToken) return;
 
     const cardsList = document.getElementById('poi-cards-list');
-    if (cardsList) cardsList.innerHTML = '<div class="loading-state">Exploring the neighborhood...</div>';
+    if (cardsList) cardsList.innerHTML = '<div class="loading-state">Finding real places...</div>';
 
     const [lng, lat] = NEIGHBORHOOD_CENTER;
     const category = this.getSearchCategory(this.currentCategory);
 
-    // Primary Search: Mapbox Search Box API (v1) - Category specific
-    // This is the most modern and robust way to find POIs by category
-    const url = `https://api.mapbox.com/search/searchbox/v1/category/${category}?proximity=${lng},${lat}&access_token=${this.accessToken}&limit=12`;
+    // Use Mapbox Search Box API - it returns REAL business names
+    const url = `https://api.mapbox.com/search/searchbox/v1/category/${category}?proximity=${lng},${lat}&limit=15&access_token=${this.accessToken}`;
 
     try {
       const response = await fetch(url);
       const data = await response.json();
 
+      console.log('Search Box API Response:', data);
+
       if (!data.features || data.features.length === 0) {
-        // Switch to fallback if Search Box returns nothing
-        await this.fetchPOIsFallback();
-        return;
-      }
-
-      this.displayPOIs(data.features, 'searchbox');
-    } catch (error) {
-      console.error('Search Box API error, trying fallback...', error);
-      await this.fetchPOIsFallback();
-    }
-  }
-
-  private async fetchPOIsFallback() {
-    if (!this.map || !this.accessToken) return;
-
-    const [lng, lat] = NEIGHBORHOOD_CENTER;
-    const query = this.currentCategory.replace('-', ' ');
-
-    // Fallback Search: Mapbox Geocoding API (v5) - Free text
-    // We remove the 'types=poi' to be more broad if specific POIs aren't found
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&access_token=${this.accessToken}&limit=12`;
-
-    try {
-      const response = await fetch(url);
-      const data = await response.json();
-
-      const cardsList = document.getElementById('poi-cards-list');
-      if (!data.features || data.features.length === 0) {
-        if (cardsList) cardsList.innerHTML = '<div class="no-results">No locations found. Try another category or zoom out.</div>';
+        if (cardsList) cardsList.innerHTML = '<div class="no-results">No places found. Try another category.</div>';
         this.clearMarkers();
         return;
       }
 
-      this.displayPOIs(data.features, 'geocoding');
+      // Filter to only show POIs within our neighborhood bounds
+      const inBounds = data.features.filter((f: any) => {
+        const coords = f.geometry?.coordinates;
+        if (!coords) return false;
+        const [poiLng, poiLat] = coords;
+        return poiLng >= MAP_BOUNDS[0][0] && poiLng <= MAP_BOUNDS[1][0] &&
+          poiLat >= MAP_BOUNDS[0][1] && poiLat <= MAP_BOUNDS[1][1];
+      });
+
+      if (inBounds.length === 0) {
+        // If nothing in bounds, show nearby results anyway
+        this.displayPOIs(data.features.slice(0, 8));
+      } else {
+        this.displayPOIs(inBounds);
+      }
     } catch (error) {
-      console.error('Fallback error:', error);
-      const cardsList = document.getElementById('poi-cards-list');
-      if (cardsList) cardsList.innerHTML = '<div class="no-results">Error connecting to map services.</div>';
+      console.error('Search error:', error);
+      if (cardsList) cardsList.innerHTML = '<div class="no-results">Error loading places. Check console.</div>';
     }
   }
 
-  private displayPOIs(features: any[], type: 'searchbox' | 'geocoding') {
+  private displayPOIs(features: any[]) {
     this.clearMarkers();
     const cardsList = document.getElementById('poi-cards-list');
-    if (!cardsList) return;
+    if (!cardsList || !this.map) return;
     cardsList.innerHTML = '';
 
     const pois: POI[] = features.map(f => {
       const p = f.properties || {};
-      const name = type === 'searchbox' ? p.name : f.text;
 
-      // Better Mock Data for Premium Feel
+      // Search Box API returns name in properties.name
+      const name = p.name || p.place_name || 'Local Business';
+      const address = p.full_address || p.address || p.place_formatted || 'Lake Nona, FL';
+      const poiCategory = p.poi_category?.[0] || this.currentCategory.replace('-', ' ');
+
+      // Mock data for premium feel
       const rating = 4 + (Math.random() * 0.9);
       const reviews = Math.floor(Math.random() * 500) + 50;
-      const priceOptions = ['$', '$$', '$$$', '$$$$'];
+      const priceOptions = ['$', '$$', '$$$'];
       const priceLevel = priceOptions[Math.floor(Math.random() * 3)];
 
       return {
-        id: f.id,
-        name: name || 'Local Spot',
-        address: type === 'searchbox' ? p.full_address || p.address || 'Lake Nona' : f.place_name?.split(',')[0] || 'Lake Nona South',
-        category: (type === 'searchbox' ? p.poi_category?.[0] : p.category) || this.currentCategory.replace('-', ' '),
-        coordinates: f.geometry?.coordinates || f.center,
+        id: f.id || Math.random().toString(36),
+        name: name,
+        address: address,
+        category: poiCategory,
+        coordinates: f.geometry?.coordinates as [number, number],
         rating: parseFloat(rating.toFixed(1)),
         reviews: reviews,
-        imageUrl: `https://loremflickr.com/400/250/${this.currentCategory.replace('-', ',')},modern/all?lock=${f.id.length}`,
+        imageUrl: `https://loremflickr.com/400/250/${this.currentCategory},business/all?lock=${name.length}`,
         priceLevel: priceLevel,
         isOpen: Math.random() > 0.3
       };
     });
 
     pois.forEach((poi) => {
-      const finalImg = poi.imageUrl;
+      if (!poi.coordinates || !Array.isArray(poi.coordinates)) {
+        console.warn('Invalid coordinates for POI:', poi.name);
+        return;
+      }
 
-      // Marker
+      // Create marker
       const marker = new mapboxgl.Marker({ color: '#f97316' })
         .setLngLat(poi.coordinates)
         .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
@@ -239,11 +235,11 @@ class NeighborhoodExplorer {
 
       this.markers.push(marker);
 
-      // Card
+      // Create card
       const card = document.createElement('div');
       card.className = 'poi-card';
       card.innerHTML = `
-        <div class="poi-image" style="background-image: url('${finalImg}')">
+        <div class="poi-image" style="background-image: url('${poi.imageUrl}')">
           <div class="poi-badges">
             ${poi.isOpen ? '<span class="status-badge open">Open Now</span>' : '<span class="status-badge closed">Closed</span>'}
             <span class="price-badge">${poi.priceLevel}</span>
@@ -262,17 +258,30 @@ class NeighborhoodExplorer {
           <p class="poi-addr-short">${poi.address}</p>
         </div>
       `;
+
       card.onclick = () => {
-        this.map?.flyTo({ center: poi.coordinates, zoom: 16, duration: 2000 });
+        this.map?.flyTo({ center: poi.coordinates, zoom: 16, duration: 1500 });
         marker.togglePopup();
       };
+
       cardsList.appendChild(card);
     });
 
+    // Fit map to show all markers (within bounds)
     if (pois.length > 0 && this.map) {
       const bounds = new mapboxgl.LngLatBounds();
-      pois.forEach(poi => bounds.extend(poi.coordinates));
-      this.map.fitBounds(bounds, { padding: { top: 100, bottom: 350, left: 60, right: 60 }, maxZoom: 15 });
+      pois.forEach(poi => {
+        if (poi.coordinates) bounds.extend(poi.coordinates);
+      });
+
+      // Only fit if we have valid bounds
+      if (!bounds.isEmpty()) {
+        this.map.fitBounds(bounds, {
+          padding: { top: 80, bottom: 280, left: 50, right: 50 },
+          maxZoom: 15,
+          duration: 1000
+        });
+      }
     }
   }
 
