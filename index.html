@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lake Nona South | Neighborhood Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #f97316;
+      --bg: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --font: 'Outfit', sans-serif;
+    }
+
+    body {
+      font-family: var(--font);
+      margin: 0;
+      color: var(--text);
+      line-height: 1.6;
+      background: #f1f5f9;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 4rem 2rem;
+      background: white;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border-radius: 24px;
+      margin-top: 2rem;
+      margin-bottom: 4rem;
+    }
+
+    header {
+      margin-bottom: 3rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin: 0 0 1rem 0;
+      font-weight: 600;
+    }
+
+    .about-section {
+      margin-bottom: 4rem;
+    }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .about-text p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .stats-card {
+      background: #fff7ed;
+      border: 1px solid #ffedd5;
+      padding: 1.5rem;
+      border-radius: 16px;
+    }
+
+    .stats-card h3 {
+      margin-top: 0;
+      color: var(--primary);
+    }
+
+    .stats-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .stats-list li {
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .explorer-container {
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      height: 700px;
+      position: relative;
+      background: #f8fafc;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .disclaimer {
+      margin-top: 2rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      padding: 1.5rem;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+
+    .report-link {
+      float: right;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <a href="#" class="report-link">⚐ Report a Problem</a>
+      <h1>Explore Lake Nona South</h1>
+    </header>
+
+    <div class="about-section">
+      <div class="about-grid">
+        <div class="about-text">
+          <h2>About</h2>
+          <p>Lake Nona South, situated in the vibrant Orlando area, combines urban flair with suburban charm. Once
+            celebrated as "the innovation hub of Florida," it now showcases a variety of spacious estates, contemporary
+            Mediterranean-style homes, and sleek modern residences.</p>
+          <p>The community is known for its outstanding schools, including the University of Central Florida, and
+            features beautiful parks, such as the lush green spaces at the university and the serene Lake Nona Park.</p>
+        </div>
+        <div class="stats-card">
+          <h3>Neighborhood Quick Info</h3>
+          <ul class="stats-list">
+            <li><span>Walk Score</span> <span>64/100</span></li>
+            <li><span>Transit Score</span> <span>32/100</span></li>
+            <li><span>Bike Score</span> <span>58/100</span></li>
+          </ul>
+          <p style="font-size: 0.8rem; margin-top: 1rem; color: var(--text-muted);">Ready to buy in Lake Nona South?
+            Explore local amenities below.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="explorer-container">
+      <!-- Embedding the map component via iframe -->
+      <iframe src="/explorer.html" title="Lake Nona Explorer"></iframe>
+    </div>
+
+    <div class="disclaimer">
+      <p><b>Disclaimer/Citation:</b> Provided by Neighborhood Intelligence™ API.</p>
+      <p>There is no express requirement given by the API on their page. We will need to review the agreement and any
+        rules provided by them to reach a conclusive disclaimer. In the meantime, the above follows industry standards.
+      </p>
+    </div>
+  </div>
+</body>
+
+</html>

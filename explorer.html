@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lake Nona Explorer Component</title>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Component specific overrides to fit nicely in iframe */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+            position: absolute;
+        }
+
+        .top-interface {
+            padding: 1rem !important;
+        }
+
+        .bottom-poi-container {
+            padding: 1rem !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="map"></div>
+
+        <div class="top-interface">
+            <nav class="category-pill-bar">
+                <button class="category-pill active" data-category="highlights">
+                    <span class="icon">✨</span> Highlights
+                </button>
+                <button class="category-pill" data-category="grocery">
+                    <span class="icon">🍊</span> Grocery
+                </button>
+                <button class="category-pill" data-category="food-drink">
+                    <span class="icon">🍔</span> Food & Drink
+                </button>
+                <button class="category-pill" data-category="parks">
+                    <span class="icon">🌳</span> Parks
+                </button>
+                <button class="category-pill" data-category="shopping">
+                    <span class="icon">🛒</span> Shopping
+                </button>
+                <button class="category-pill" data-category="sports">
+                    <span class="icon">⚽</span> Sports
+                </button>
+                <button class="category-pill" data-category="entertainment">
+                    <span class="icon">🎭</span> Entertainment
+                </button>
+            </nav>
+        </div>
+
+        <div class="bottom-poi-container">
+            <div id="poi-cards-list" class="poi-cards-list"></div>
+        </div>
+
+        <div id="api-key-modal" class="modal">
+            <div class="modal-content glass">
+                <h2>Mapbox API Key</h2>
+                <p>Please enter your Mapbox Public Access Token.</p>
+                <input type="password" id="mapbox-token" placeholder="pk.eyJ1Ijo..." />
+                <button id="save-token">Start Explorer</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
