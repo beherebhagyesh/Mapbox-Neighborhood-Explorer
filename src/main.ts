@@ -137,9 +137,9 @@ class NeighborhoodExplorer {
     const [lng, lat] = NEIGHBORHOOD_CENTER;
     const category = this.getSearchCategory(this.currentCategory);
 
-    // Primary Search: Mapbox Search Box API (v1) - Category specific
-    // This is the most modern and robust way to find POIs by category
-    const url = `https://api.mapbox.com/search/searchbox/v1/category/${category}?proximity=${lng},${lat}&access_token=${this.accessToken}&limit=12`;
+    // Primary Search: Mapbox Search Box API (v1) - Restricted by Bounding Box (bbox)
+    const bbox = '-81.298,28.338,-81.246,28.398';
+    const url = `https://api.mapbox.com/search/searchbox/v1/category/${category}?proximity=${lng},${lat}&bbox=${bbox}&access_token=${this.accessToken}&limit=12`;
 
     try {
       const response = await fetch(url);
@@ -163,10 +163,10 @@ class NeighborhoodExplorer {
 
     const [lng, lat] = NEIGHBORHOOD_CENTER;
     const query = this.currentCategory.replace('-', ' ');
+    const bbox = '-81.298,28.338,-81.246,28.398';
 
-    // Fallback Search: Mapbox Geocoding API (v5) - Free text
-    // We remove the 'types=poi' to be more broad if specific POIs aren't found
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&access_token=${this.accessToken}&limit=12`;
+    // Fallback Search: Mapbox Geocoding API (v5) - Restricted by Bounding Box (bbox)
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${lng},${lat}&bbox=${bbox}&access_token=${this.accessToken}&limit=12`;
 
     try {
       const response = await fetch(url);
