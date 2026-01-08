@@ -24,25 +24,6 @@ const NEIGHBORHOOD_BOUNDARY = [
   [-81.298, 28.398]
 ];
 
-// Helper function: Point-in-polygon check using ray casting algorithm
-
-// Helper function: Point-in-polygon check using ray casting algorithm
-function isPointInPolygon(point: [number, number], polygon: number[][]): boolean {
-  const [x, y] = point;
-  let inside = false;
-
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-      inside = !inside;
-    }
-  }
-
-  return inside;
-}
-
 class NeighborhoodExplorer {
   private map: mapboxgl.Map | null = null;
   private markers: mapboxgl.Marker[] = [];
@@ -212,24 +193,7 @@ class NeighborhoodExplorer {
     if (!cardsList) return;
     cardsList.innerHTML = '';
 
-    // Filter features to only include POIs within the neighborhood boundary
-    const filteredFeatures = features.filter(f => {
-      const coords = type === 'searchbox'
-        ? f.geometry?.coordinates
-        : (f.geometry?.coordinates || f.center);
-      if (!coords) return false;
-      return isPointInPolygon(coords as [number, number], NEIGHBORHOOD_BOUNDARY);
-    });
-
-    // If no POIs in neighborhood, show nearby ones with a note
-    const displayFeatures = filteredFeatures.length > 0 ? filteredFeatures : features.slice(0, 6);
-    const isShowingNearby = filteredFeatures.length === 0 && features.length > 0;
-
-    if (isShowingNearby) {
-      cardsList.innerHTML = '<div class="notice">Showing nearby locations outside the neighborhood boundary.</div>';
-    }
-
-    const pois: POI[] = displayFeatures.map(f => {
+    const pois: POI[] = features.map(f => {
       const p = f.properties || {};
       const name = type === 'searchbox' ? p.name : f.text;
 
