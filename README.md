@@ -32,73 +32,56 @@ Open [http://localhost:4173](http://localhost:4173) and enter your Mapbox Public
 
 ---
 
-## 🔧 Customizing the Neighborhood
+## 🔧 Customizing Neighborhoods
 
-All neighborhood configuration is in `src/main.ts`. Here's how to change it:
+The app now supports multiple neighborhoods! All configuration is in `src/config.ts`.
 
-### 1. Set the Center Point
+### Default Neighborhoods Included
 
-Find your neighborhood's center coordinates (longitude, latitude):
+1. **Lake Nona South** - Orlando, Florida (default)
+2. **River Oaks** - Denton, Texas  
+3. **Government Hill** - San Antonio, Texas
+4. **North Hollywood** - Los Angeles, California
+5. **Shadyside** - Pittsburgh, Pennsylvania
+6. **Downtown Orlando** - Orlando, Florida
+7. **Winter Park** - Orlando, Florida
 
-```typescript
-// src/main.ts - Line 17
-const NEIGHBORHOOD_CENTER: [number, number] = [-81.272, 28.368]; // [lng, lat]
-```
+### Adding Your Own Neighborhood
 
-**How to find coordinates:**
-- Use [Google Maps](https://maps.google.com) - Right-click → "What's here?"
-- Use [geojson.io](https://geojson.io) for precise coordinates
-
-### 2. Define the Boundary Polygon
-
-The red dashed boundary shown on the map:
+Add a new neighborhood to the `NEIGHBORHOODS` array in `src/config.ts`:
 
 ```typescript
-// src/main.ts - Lines 19-25
-const NEIGHBORHOOD_BOUNDARY = [
-  [-81.298, 28.398],  // Northwest corner
-  [-81.246, 28.398],  // Northeast corner
-  [-81.246, 28.338],  // Southeast corner
-  [-81.298, 28.338],  // Southwest corner
-  [-81.298, 28.398]   // Close the polygon (same as first point)
-];
+{
+  id: 'your-neighborhood',
+  name: 'Your Neighborhood Name',
+  center: [-81.379, 28.538], // [lng, lat]
+  defaultZoom: 13.8,
+  boundary: [
+    [-81.395, 28.555], // Northwest corner
+    [-81.360, 28.555], // Northeast corner  
+    [-81.360, 28.520], // Southeast corner
+    [-81.395, 28.520], // Southwest corner
+    [-81.395, 28.555]  // Close the polygon
+  ],
+  bounds: [
+    [-81.42, 28.50],  // Southwest corner (add ~0.02 padding)
+    [-81.34, 28.58]   // Northeast corner (add ~0.02 padding)
+  ]
+}
 ```
 
-### 3. Set the Map Bounds (Geofencing)
+### How to Find Coordinates
 
-This restricts how far users can pan/zoom:
+- **Center Point**: Use [Google Maps](https://maps.google.com) - Right-click → "What's here?"
+- **Boundary Polygon**: Use [geojson.io](https://geojson.io) to draw precise boundaries
+- **Bounds**: Make bounds slightly larger than boundary for better UX
 
-```typescript
-// src/main.ts - Lines 28-31
-const MAP_BOUNDS: [[number, number], [number, number]] = [
-  [-81.32, 28.32],  // Southwest corner (add ~0.02 padding)
-  [-81.22, 28.42]   // Northeast corner (add ~0.02 padding)
-];
-```
+### Neighborhood Switching
 
-> **Tip:** Make MAP_BOUNDS slightly larger than NEIGHBORHOOD_BOUNDARY for better UX.
-
-### 4. Complete Example: Changing to a New Neighborhood
-
-To switch from Lake Nona South to **Downtown Orlando**:
-
-```typescript
-// Downtown Orlando configuration
-const NEIGHBORHOOD_CENTER: [number, number] = [-81.379, 28.538];
-
-const NEIGHBORHOOD_BOUNDARY = [
-  [-81.395, 28.555],
-  [-81.360, 28.555],
-  [-81.360, 28.520],
-  [-81.395, 28.520],
-  [-81.395, 28.555]
-];
-
-const MAP_BOUNDS: [[number, number], [number, number]] = [
-  [-81.42, 28.50],
-  [-81.34, 28.58]
-];
-```
+Users can now switch between neighborhoods using the dropdown selector at the top of the map. The app will:
+- Update map center and bounds
+- Reload POIs for the new area
+- Maintain the selected category filter
 
 ---
 
@@ -108,6 +91,7 @@ const MAP_BOUNDS: [[number, number], [number, number]] = [
 ├── index.html          # Landing page with About section
 ├── explorer.html       # Map component (embedded via iframe)
 ├── src/
+│   ├── config.ts       # Neighborhood configurations
 │   ├── main.ts         # Core logic, Mapbox integration, POI fetching
 │   └── style.css       # Premium styling
 ├── vite.config.ts      # Multi-page Vite configuration

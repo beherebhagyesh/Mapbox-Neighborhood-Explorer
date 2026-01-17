@@ -1,5 +1,7 @@
 import mapboxgl from 'mapbox-gl';
 import './style.css';
+import type { NeighborhoodConfig } from './config';
+import { getDefaultNeighborhood, NEIGHBORHOODS } from './config';
 
 interface POI {
   id: string;
@@ -14,31 +16,19 @@ interface POI {
   isOpen?: boolean;
 }
 
-const NEIGHBORHOOD_CENTER: [number, number] = [-81.272, 28.368];
-const DEFAULT_ZOOM = 13.8;
-const NEIGHBORHOOD_BOUNDARY = [
-  [-81.298, 28.398],
-  [-81.246, 28.398],
-  [-81.246, 28.338],
-  [-81.298, 28.338],
-  [-81.298, 28.398]
-];
-
-// Map bounds for Lake Nona South (with padding for user experience)
-const MAP_BOUNDS: [[number, number], [number, number]] = [
-  [-81.32, 28.32],  // Southwest
-  [-81.22, 28.42]   // Northeast
-];
 
 class NeighborhoodExplorer {
   private map: mapboxgl.Map | null = null;
   private markers: mapboxgl.Marker[] = [];
   private accessToken: string = '';
   private currentCategory: string = 'highlights';
+  private currentNeighborhood: NeighborhoodConfig;
 
   constructor() {
+    this.currentNeighborhood = getDefaultNeighborhood();
     this.checkStoredToken();
     this.initEventListeners();
+    this.initNeighborhoodSelector();
   }
 
   private checkStoredToken() {
@@ -48,6 +38,63 @@ class NeighborhoodExplorer {
       const modal = document.getElementById('api-key-modal');
       if (modal) modal.classList.add('hidden');
       this.initMap();
+    }
+  }
+
+  private initNeighborhoodSelector() {
+    const selector = document.getElementById('neighborhood-selector') as HTMLSelectElement;
+    if (!selector) return;
+
+    // Populate selector with neighborhoods
+    selector.innerHTML = '';
+    NEIGHBORHOODS.forEach((neighborhood: NeighborhoodConfig) => {
+      const option = document.createElement('option');
+      option.value = neighborhood.id;
+      option.textContent = neighborhood.name;
+      if (neighborhood.id === this.currentNeighborhood.id) {
+        option.selected = true;
+      }
+      selector.appendChild(option);
+    });
+
+    // Handle neighborhood change
+    selector.addEventListener('change', (e) => {
+      const selectedId = (e.target as HTMLSelectElement).value;
+      const newNeighborhood = NEIGHBORHOODS.find((n: NeighborhoodConfig) => n.id === selectedId);
+      if (newNeighborhood) {
+        this.currentNeighborhood = newNeighborhood;
+        this.switchNeighborhood();
+      }
+    });
+  }
+
+  private switchNeighborhood() {
+    // Clear existing markers and POIs
+    this.clearMarkers();
+    const cardsList = document.getElementById('poi-cards-list');
+    if (cardsList) cardsList.innerHTML = '';
+
+    if (this.map) {
+      // Update map center and bounds
+      this.map.jumpTo({
+        center: this.currentNeighborhood.center,
+        zoom: this.currentNeighborhood.defaultZoom
+      });
+      this.map.setMaxBounds(this.currentNeighborhood.bounds);
+
+      // Remove old boundary layer and source
+      if (this.map.getLayer('neighborhood-line-layer')) {
+        this.map.removeLayer('neighborhood-line-layer');
+      }
+      if (this.map.getSource('neighborhood-line')) {
+        this.map.removeSource('neighborhood-line');
+      }
+
+      // Add new boundary
+      this.addNeighborhoodBoundary();
+      
+      // Fetch POIs for new neighborhood
+      this.fetchPOIs();
     }
   }
 
@@ -84,11 +131,11 @@ class NeighborhoodExplorer {
     this.map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/light-v11',
-      center: NEIGHBORHOOD_CENTER,
-      zoom: DEFAULT_ZOOM,
+      center: this.currentNeighborhood.center,
+      zoom: this.currentNeighborhood.defaultZoom,
       minZoom: 12,
       maxZoom: 18,
-      maxBounds: MAP_BOUNDS,
+      maxBounds: this.currentNeighborhood.bounds,
       attributionControl: false
     });
 
@@ -107,7 +154,7 @@ class NeighborhoodExplorer {
       data: {
         type: 'Feature',
         properties: {},
-        geometry: { type: 'LineString', coordinates: NEIGHBORHOOD_BOUNDARY }
+        geometry: { type: 'LineString', coordinates: this.currentNeighborhood.boundary }
       }
     });
 
@@ -143,7 +190,7 @@ class NeighborhoodExplorer {
     const cardsList = document.getElementById('poi-cards-list');
     if (cardsList) cardsList.innerHTML = '<div class="loading-state">Finding real places...</div>';
 
-    const [lng, lat] = NEIGHBORHOOD_CENTER;
+    const [lng, lat] = this.currentNeighborhood.center;
     const category = this.getSearchCategory(this.currentCategory);
 
     // Use Mapbox Search Box API - it returns REAL business names
@@ -152,8 +199,6 @@ class NeighborhoodExplorer {
     try {
       const response = await fetch(url);
       const data = await response.json();
-
-      console.log('Search Box API Response:', data);
 
       if (!data.features || data.features.length === 0) {
         if (cardsList) cardsList.innerHTML = '<div class="no-results">No places found. Try another category.</div>';
@@ -166,8 +211,8 @@ class NeighborhoodExplorer {
         const coords = f.geometry?.coordinates;
         if (!coords) return false;
         const [poiLng, poiLat] = coords;
-        return poiLng >= MAP_BOUNDS[0][0] && poiLng <= MAP_BOUNDS[1][0] &&
-          poiLat >= MAP_BOUNDS[0][1] && poiLat <= MAP_BOUNDS[1][1];
+        return poiLng >= this.currentNeighborhood.bounds[0][0] && poiLng <= this.currentNeighborhood.bounds[1][0] &&
+          poiLat >= this.currentNeighborhood.bounds[0][1] && poiLat <= this.currentNeighborhood.bounds[1][1];
       });
 
       if (inBounds.length === 0) {
@@ -177,8 +222,7 @@ class NeighborhoodExplorer {
         this.displayPOIs(inBounds);
       }
     } catch (error) {
-      console.error('Search error:', error);
-      if (cardsList) cardsList.innerHTML = '<div class="no-results">Error loading places. Check console.</div>';
+      if (cardsList) cardsList.innerHTML = '<div class="no-results">Error loading places. Please try again.</div>';
     }
   }
 
@@ -193,7 +237,7 @@ class NeighborhoodExplorer {
 
       // Search Box API returns name in properties.name
       const name = p.name || p.place_name || 'Local Business';
-      const address = p.full_address || p.address || p.place_formatted || 'Lake Nona, FL';
+      const address = p.full_address || p.address || p.place_formatted || this.currentNeighborhood.name;
       const poiCategory = p.poi_category?.[0] || this.currentCategory.replace('-', ' ');
 
       // Mock data for premium feel
@@ -216,11 +260,10 @@ class NeighborhoodExplorer {
       };
     });
 
-    pois.forEach((poi) => {
-      if (!poi.coordinates || !Array.isArray(poi.coordinates)) {
-        console.warn('Invalid coordinates for POI:', poi.name);
-        return;
-      }
+      pois.forEach((poi) => {
+        if (!poi.coordinates || !Array.isArray(poi.coordinates)) {
+          return;
+        }
 
       // Create marker
       const marker = new mapboxgl.Marker({ color: '#f97316' })
